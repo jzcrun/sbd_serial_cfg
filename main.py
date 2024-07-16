@@ -1,145 +1,15 @@
-from ast import Try
-from asyncio.windows_events import NULL
-from glob import glob0
-from socket import timeout
+# 导入类
 import sys
-from typing import override
-from urllib.request import install_opener
-# 导入 类
+
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QWidget, QToolTip, QPushButton, QApplication, QComboBox, QLabel, QLineEdit
+from PyQt5.QtWidgets import QApplication, QWidget, QToolTip, QApplication, QLineEdit, QDesktopWidget
 from PyQt5.QtGui import QIcon, QFont
 
-from networkx import is_empty
 import serial, threading, time
 import serial.tools.list_ports
 
-class mySerial(serial.Serial):
-    def __init__(self, input:QLineEdit, output:QLineEdit, readtime, port = None, baud:int=9600, databits:int=8, parity:str="N", stopbits:int=1):
-        super().__init__(port, baud, databits, parity, stopbits, timeout=readtime)
-        self.close()
-        self.input = input
-        self.output = output
-        self.readFlag = False
-        self.set_buffer_size(16*1024, 16*1024)
-    
-    def setPort(self, port):
-        if self.is_open:
-            self.close()
-            self.port = port
-            self.open()
-            print(f'open new port {self.port}')
-        else:
-            self.port = port
-
-    def setBaud(self, baud):
-        if self.is_open:
-            self.close()
-            self.baudrate = baud
-            self.open()
-            print(f'open port {self.port} new baud {self.baudrate}')
-        else:
-            self.baudrate = baud
-
-    def setDatabits(self, databits):
-        if self.is_open:
-            self.close()
-            self.bytesize = databits
-            self.open()
-            print(f'open port {self.port} new bytesize {self.bytesize}')
-        else:
-            self.bytesize = databits
-
-    def setParity(self, parity):
-        if self.is_open:
-            self.close()
-            self.parity = parity
-            self.open()
-            print(f'open port {self.port} new parity {self.parity}')
-        else:
-            self.parity = parity
-
-    def setStopbits(self, stopbits):
-        if self.is_open:
-            self.close()
-            self.stopbits = stopbits
-            self.open()
-            print(f'open port {self.port} new stopbits {self.stopbits}')
-        else:
-            self.stopbits = stopbits
-
-    def startRead(self):
-        self.readFlag = True
-
-    def stopRead(self):
-        self.readFlag = False
-
-class myComboBox(QWidget):
-    def __init__(self, parent, mySerial:mySerial, type):
-        super().__init__(parent)
-        self.label = QLabel(self)
-        self.combo = QComboBox(self)
-        self.serial = mySerial
-        self.type = type
-        self.initUI()
-
-    def initUI(self):
-        self.label.resize(100, 30)
-        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.combo.move(self.combo.x() + 110, self.combo.y())
-        self.combo.currentIndexChanged.connect(self.selectionChanged1)
-
-    def selectionChanged1(self, i):
-        if self.type == 'port':
-            self.serial.setPort(f'{self.combo.currentText()}')
-        elif self.type == 'baud':
-            self.serial.setBaud(int(f'{self.combo.currentText()}'))
-        elif self.type == 'databits':
-            self.serial.setDatabits(int(f'{self.combo.currentText()}'))
-        elif self.type == 'parity':
-            parity_dir = ["N", "O", "E"]
-            self.serial.setParity(parity_dir[i])
-        elif self.type == 'stopbits':
-            self.serial.setStopbits(float(f'{self.combo.currentText()}'))
-
-class myButton(QPushButton):
-    def __init__(self, parent, mySerial:mySerial, type='start_stop'):
-        super().__init__(parent)
-        self.serial = mySerial
-        self.type = type
-        self.initUI()
-
-    def initUI(self):
-        self.setStyleSheet("QPushButton { color: black; }")
-        if self.type == 'start_stop':
-            self.setText('打开串口')
-            self.setToolTip("启动串口收发")
-        if self.type == 'send':
-            self.setText('发送')
-            self.setToolTip("发送数据")
-        self.clicked[bool].connect(self.handle_clicked)
-
-    @override
-    def setGeometry(self, ax:int, ay:int, aw:int, ah:int):
-        super().setGeometry(ax, ay, aw, ah)
-
-    def handle_clicked(self):
-        if self.type == 'start_stop':
-            if self.serial.is_open:
-                self.setStyleSheet("QPushButton { color: black; }")
-                self.setText('打开串口')
-                self.serial.stopRead()
-                self.serial.close()
-                print(f'close {self.serial.port}')
-            else:
-                self.setStyleSheet("QPushButton { color: red; }")
-                self.setText('关闭串口')
-                self.serial.open()
-                self.serial.startRead()
-                print(f'open {self.serial.port} {self.serial.baudrate} {self.serial.bytesize} {self.serial.parity} {self.serial.stopbits}')
-        elif self.type == 'send':
-            if self.serial.is_open and not self.serial.output.text() == '':
-                self.serial.write(self.serial.output.text().encode())
+from sbdSerial import mySerial
+from sdbWidget import myComboBox, myButton, myEditLine
 
 def read_serial(ser:mySerial):
     while True:
@@ -152,13 +22,61 @@ def read_serial(ser:mySerial):
             time.sleep(0.1)  # 等待一段时间继续读取
         time.sleep(0.5)
 
+def check_ports():
+    before = {p.device for p in serial.tools.list_ports.comports()}
+    while True:
+        time.sleep(1)  # 每秒检查一次
+        after = {p.device for p in serial.tools.list_ports.comports()}
+        
+        added = after - before
+        removed = before - after
+        
+        if added:
+            print(f"Added: {', '.join(added)}")
+        if removed:
+            print(f"Removed: {', '.join(removed)}")
+        
+        before = after
+
+def serial_port_refresh(port_combo:myComboBox):
+    before = {p.device for p in serial.tools.list_ports.comports()}
+    while True:
+        time.sleep(1)  # 每秒检查一次
+        after = {p.device for p in serial.tools.list_ports.comports()}
+        
+        added = after - before
+        removed = before - after
+        
+        if added or removed:
+            portCombo.combo.clear()
+            portCombo.combaItemNumber = 0
+            ports = serial.tools.list_ports.comports()
+            for port in ports:
+                portCombo.combo.addItem(f"{port.device}")
+                portCombo.combaItemNumber += 1
+        
+        before = after
+
+def relativeMove(obj, dx:int, dy:int):
+    obj.move(obj.x() + dx, obj.y() + dy)
+
 if __name__ == '__main__':
     # 创建 QApplication 类的实例，并传入命令行参数
     app = QApplication(sys.argv)
+
+    desktop = QDesktopWidget()
+    screen_width = desktop.screenGeometry().width()
+    screen_height = desktop.screenGeometry().height()
+    #print(f"Screen Width: {screen_width}")
+    #print(f"Screen Height: {screen_height}")
+
+    window_width = 960
+    window_height = 950
+
     # 创建 QWidget 类的实例，相当于创建一个窗口
     w = QWidget()
     # 设置宽高位置
-    w.setGeometry(0, 0, 1920, 1080)
+    w.setGeometry(int(screen_width/2) - int(window_width/2), int(screen_height/2) - int(window_height/2), window_width, window_height)
 
     input =  QLineEdit(w)
     input.setGeometry(40, 290, 400, 400)
@@ -183,10 +101,11 @@ if __name__ == '__main__':
     ports = serial.tools.list_ports.comports()
     if not ports:
         portCombo.combo.addItem('None')
+        portCombo.combaItemNumber += 1
     else:
         for port in ports:
-            #print(f"{port}: {port.device}")
             portCombo.combo.addItem(f"{port.device}")
+            portCombo.combaItemNumber += 1
     portCombo.combo.setCurrentIndex(0)
 
     baudCombo = myComboBox(w, ser, 'baud')
@@ -221,12 +140,81 @@ if __name__ == '__main__':
         stopbitsCombo.combo.addItem(stop)
     stopbitsCombo.combo.setCurrentIndex(0)
 
+    editAddr = myEditLine(w, ser, 'addr')
+    editAddr.label.setText('设备地址:')
+    editAddr.move(40, 750)
+    relativeMove(editAddr.lineEdit, -35, 0)
+    editAddr.lineEdit.setText('1')
+
+    comboOperation = myComboBox(w, ser, 'operation')
+    comboOperation.label.setText('MODBUS操作码:')
+    comboOperation.combo.addItem('3')
+    comboOperation.combo.addItem('4')
+    comboOperation.move(260, 750)
+    relativeMove(comboOperation.combo, 0, 5)
+    comboOperation.combo.setCurrentIndex(0)
+
+    editDataAddr = myEditLine(w, ser, 'dataAddr')
+    editDataAddr.label.setText('数据地址:')
+    editDataAddr.move(480, 750)
+    relativeMove(editDataAddr.lineEdit, -30, 0)
+    editDataAddr.lineEdit.setText('20000')
+
+    editDataLen = myEditLine(w, ser, 'dataLen')
+    editDataLen.label.setText('数据长度:')
+    editDataLen.move(700, 750)
+    relativeMove(editDataLen.lineEdit, -30, 0)
+    editDataLen.lineEdit.setText('1')
+
+    comboDataType = myComboBox(w, ser, 'dataType')
+    comboDataType.label.setAlignment(Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter)
+    comboDataType.label.setText('数据类型:')
+    comboDataType.combo.addItem('U16')
+    comboDataType.move(40, 790)
+    relativeMove(comboDataType.combo, -30, 5)
+
+    editFactory = myEditLine(w, ser, 'factory')
+    editFactory.label.setText('系数:')
+    editFactory.move(260, 790)
+    relativeMove(editFactory.lineEdit, -60, 0)
+    editFactory.lineEdit.setText('0.1')
+
+    editBase = myEditLine(w, ser, 'base')
+    editBase.label.setText('基数:')
+    editBase.move(480, 790)
+    relativeMove(editBase.lineEdit, -60, 0)
+    editBase.lineEdit.setText('0')
+
+    comboSbdType = myComboBox(w, ser, 'sbdType')
+    comboSbdType.label.setAlignment(Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter)
+    comboSbdType.label.resize(120, 30)
+    comboSbdType.label.setText('输变电数据类型:')
+    comboSbdType.combo.addItem('FLOAT')
+    comboSbdType.combo.addItem('INT')
+    comboSbdType.combo.addItem('UINT')
+    comboSbdType.combo.addItem('SWITCH')
+    comboSbdType.move(700, 830)
+    relativeMove(comboSbdType.combo, 10, 5)
+    comboSbdType.combo.setCurrentIndex(0)
+
+    editSensorType = myEditLine(w, ser, 'sensorType')
+    editSensorType.label.setText('传感器类型值:')
+    editSensorType.move(700, 790)
+    relativeMove(editSensorType.lineEdit, -5, 0)
+    editSensorType.lineEdit.setText('2054')
+
+    btn3 = myButton(w, ser, 'add')
+    btn3.setGeometry(700, 870, 120, 40)
+
     # 设置窗口的标题与图标
     w.setWindowTitle('输变电配置')
     app.setWindowIcon(QIcon("./sbd.ico"))
 
-    thread = threading.Thread(target=read_serial, args=(ser,))
-    thread.start()
+    read_thread = threading.Thread(target=read_serial, args=(ser,))
+    read_thread.start()
+
+    port_refresh_thread = threading.Thread(target=serial_port_refresh, args=(portCombo,))
+    port_refresh_thread.start()
 
     # 显示窗口
     w.show()

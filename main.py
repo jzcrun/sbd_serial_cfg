@@ -2,41 +2,23 @@
 import sys
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QWidget, QToolTip, QApplication, QLineEdit, QDesktopWidget
+from PyQt5.QtWidgets import QApplication, QWidget, QToolTip, QApplication, QTextEdit, QDesktopWidget
 from PyQt5.QtGui import QIcon, QFont
 
 import serial, threading, time
 import serial.tools.list_ports
 
 from sbdSerial import mySerial
-from sdbWidget import myComboBox, myButton, myEditLine
+from sdbWidget import myComboBox, myButton, myAddTask
 
 def read_serial(ser:mySerial):
     while True:
         if ser.is_open:
             if ser.readFlag and ser.in_waiting > 0:
                 data = ser.readline().decode('utf-8')  # 读取一行数据，解码为字符串
-                print(data)  # 打印数据
-                text = ser.input.text()+data
-                ser.input.setText(text)
+                ser.input.insertPlainText(data)
             time.sleep(0.1)  # 等待一段时间继续读取
         time.sleep(0.5)
-
-def check_ports():
-    before = {p.device for p in serial.tools.list_ports.comports()}
-    while True:
-        time.sleep(1)  # 每秒检查一次
-        after = {p.device for p in serial.tools.list_ports.comports()}
-        
-        added = after - before
-        removed = before - after
-        
-        if added:
-            print(f"Added: {', '.join(added)}")
-        if removed:
-            print(f"Removed: {', '.join(removed)}")
-        
-        before = after
 
 def serial_port_refresh(port_combo:myComboBox):
     before = {p.device for p in serial.tools.list_ports.comports()}
@@ -78,11 +60,11 @@ if __name__ == '__main__':
     # 设置宽高位置
     w.setGeometry(int(screen_width/2) - int(window_width/2), int(screen_height/2) - int(window_height/2), window_width, window_height)
 
-    input =  QLineEdit(w)
+    input =  QTextEdit(w)
     input.setGeometry(40, 290, 400, 400)
     input.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
-    output =  QLineEdit(w)
+    output =  QTextEdit(w)
     output.setGeometry(450, 290, 400, 400)
     output.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
@@ -140,71 +122,8 @@ if __name__ == '__main__':
         stopbitsCombo.combo.addItem(stop)
     stopbitsCombo.combo.setCurrentIndex(0)
 
-    editAddr = myEditLine(w, ser, 'addr')
-    editAddr.label.setText('设备地址:')
-    editAddr.move(40, 750)
-    relativeMove(editAddr.lineEdit, -35, 0)
-    editAddr.lineEdit.setText('1')
-
-    comboOperation = myComboBox(w, ser, 'operation')
-    comboOperation.label.setText('MODBUS操作码:')
-    comboOperation.combo.addItem('3')
-    comboOperation.combo.addItem('4')
-    comboOperation.move(260, 750)
-    relativeMove(comboOperation.combo, 0, 5)
-    comboOperation.combo.setCurrentIndex(0)
-
-    editDataAddr = myEditLine(w, ser, 'dataAddr')
-    editDataAddr.label.setText('数据地址:')
-    editDataAddr.move(480, 750)
-    relativeMove(editDataAddr.lineEdit, -30, 0)
-    editDataAddr.lineEdit.setText('20000')
-
-    editDataLen = myEditLine(w, ser, 'dataLen')
-    editDataLen.label.setText('数据长度:')
-    editDataLen.move(700, 750)
-    relativeMove(editDataLen.lineEdit, -30, 0)
-    editDataLen.lineEdit.setText('1')
-
-    comboDataType = myComboBox(w, ser, 'dataType')
-    comboDataType.label.setAlignment(Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter)
-    comboDataType.label.setText('数据类型:')
-    comboDataType.combo.addItem('U16')
-    comboDataType.move(40, 790)
-    relativeMove(comboDataType.combo, -30, 5)
-
-    editFactory = myEditLine(w, ser, 'factory')
-    editFactory.label.setText('系数:')
-    editFactory.move(260, 790)
-    relativeMove(editFactory.lineEdit, -60, 0)
-    editFactory.lineEdit.setText('0.1')
-
-    editBase = myEditLine(w, ser, 'base')
-    editBase.label.setText('基数:')
-    editBase.move(480, 790)
-    relativeMove(editBase.lineEdit, -60, 0)
-    editBase.lineEdit.setText('0')
-
-    comboSbdType = myComboBox(w, ser, 'sbdType')
-    comboSbdType.label.setAlignment(Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter)
-    comboSbdType.label.resize(120, 30)
-    comboSbdType.label.setText('输变电数据类型:')
-    comboSbdType.combo.addItem('FLOAT')
-    comboSbdType.combo.addItem('INT')
-    comboSbdType.combo.addItem('UINT')
-    comboSbdType.combo.addItem('SWITCH')
-    comboSbdType.move(700, 830)
-    relativeMove(comboSbdType.combo, 10, 5)
-    comboSbdType.combo.setCurrentIndex(0)
-
-    editSensorType = myEditLine(w, ser, 'sensorType')
-    editSensorType.label.setText('传感器类型值:')
-    editSensorType.move(700, 790)
-    relativeMove(editSensorType.lineEdit, -5, 0)
-    editSensorType.lineEdit.setText('2054')
-
-    btn3 = myButton(w, ser, 'add')
-    btn3.setGeometry(700, 870, 120, 40)
+    addTask =  myAddTask(w, ser)
+    addTask.move(0, 750)
 
     # 设置窗口的标题与图标
     w.setWindowTitle('输变电配置')

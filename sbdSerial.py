@@ -1,9 +1,9 @@
 import serial
 import serial.tools.list_ports
-from PyQt5.QtWidgets import QLineEdit
+from PyQt5.QtWidgets import QTextEdit
 
 class mySerial(serial.Serial):
-    def __init__(self, input:QLineEdit, output:QLineEdit, readtime, port = None, baud:int=9600, databits:int=8, parity:str="N", stopbits:int=1):
+    def __init__(self, input:QTextEdit, output:QTextEdit, readtime, port = None, baud:int=9600, databits:int=8, parity:str="N", stopbits:int=1):
         super().__init__(port, baud, databits, parity, stopbits, timeout=readtime)
         self.close()
         self.input = input

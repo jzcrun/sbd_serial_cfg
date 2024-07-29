@@ -45,12 +45,31 @@ class myButton(QPushButton):
         if self.type == 'start_stop':
             self.setText('打开串口')
             self.setToolTip("启动串口收发")
-        if self.type == 'send':
+        elif self.type == 'send':
             self.setText('发送')
             self.setToolTip("发送数据")
-        if self.type == 'add':
+        elif self.type == 'ATsend':
+            self.setText('发送AT指令')
+            self.setToolTip("发送数据结尾添加换行标志")
+        elif self.type == 'clear':
+            self.setText('清空接收')
+            self.setToolTip("清空接收到的数据")
+        elif self.type == 'add':
             self.setText('添加采集任务')
             self.setToolTip("添加采集modbus传感器任务，并将采集到的数据通过输变电协议发送")
+        elif self.type == 'del':
+            self.setText('取消采集任务')
+            self.setToolTip("取消采集modbus传感器任务")
+        elif self.type == 'TouChuan1':
+            self.setText('进入/退出LoRa透传模式')
+            self.setToolTip("进入/退出LoRa透传模式")
+        elif self.type == 'TouChuan2':
+            self.setText('进入/退出Sensor透传模式')
+            self.setToolTip("进入/退出Sensor透传模式")
+        elif self.type == 'reboot':
+            self.setText('重启节点')
+            self.setToolTip("重启节点")
+
         self.clicked[bool].connect(self.handle_clicked)
 
     @override
@@ -72,8 +91,30 @@ class myButton(QPushButton):
                 self.serial.startRead()
                 print(f'open {self.serial.port} {self.serial.baudrate} {self.serial.bytesize} {self.serial.parity} {self.serial.stopbits}')
         elif self.type == 'send':
+            cmd = self.serial.output.toPlainText()
             if self.serial.is_open and not self.serial.output.toPlainText() == '':
-                self.serial.write(self.serial.output.toPlainText().encode())
+                #self.serial.write(self.serial.output.toPlainText().encode())
+                while len(cmd) > 32:
+                    self.serial.write(cmd[0:32].encode())
+                    time.sleep(1.5)
+                    cmd = cmd[32:]
+
+                if len(cmd) > 0:
+                    self.serial.write(cmd.encode())
+        elif self.type == 'ATsend':
+            if self.serial.is_open and not self.serial.output.toPlainText() == '':
+                self.serial.write((self.serial.output.toPlainText() + '\r\n').encode())
+        elif self.type == 'clear':
+            self.serial.input.clear()
+        elif self.type == 'TouChuan1':
+            if self.serial.is_open:
+                self.serial.write('+++'.encode())
+        elif self.type == 'TouChuan2':
+            if self.serial.is_open:
+                self.serial.write('***'.encode())
+        elif self.type == 'reboot':
+            if self.serial.is_open:
+                self.serial.write('set,reboot'.encode())
 
 class myEditLine(QWidget):
     def __init__(self, parent, ser:mySerial, type):
@@ -94,6 +135,47 @@ class myEditLine(QWidget):
         self.lineEdit.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.lineEdit.move(105, 0)
 
+class myEditLineWithButton(QWidget):
+    def __init__(self, parent, ser:mySerial, type):
+        super().__init__(parent)
+        self.serial = ser
+        self.button = QPushButton(self)
+        self.lineEdit = QLineEdit(self)
+        self.type = type
+        self.initUI()
+
+    def initUI(self):
+        self.setGeometry(0, 0, 280, 30)
+        self.button.resize(150, 30)
+        self.lineEdit.resize(120, 30)
+        self.lineEdit.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.lineEdit.move(155, 0)
+
+        if self.type == 'setCycle':
+            self.button.setText('设置上报周期(s)')
+            self.lineEdit.setText('10')
+        elif self.type == 'setAddr':
+            self.button.setText('设置设备地址')
+            self.lineEdit.setText('010203040506')
+        elif self.type == 'setChn':
+            self.button.setText('设置通道(0~80)')
+            self.lineEdit.setText('1')
+
+        self.button.clicked[bool].connect(self.handle_clicked)
+
+    def handle_clicked(self):
+        if self.type == 'setCycle':
+            cmd = 'set,cycle,' + self.lineEdit.text()
+        elif self.type == 'setAddr':
+            cmd = 'set,id,' + self.lineEdit.text()  
+        elif self.type == 'setChn':
+            cmd = 'set,channel,' + self.lineEdit.text()
+        else:
+            cmd = 'hello'
+
+        if self.serial.is_open:
+            self.serial.write(cmd.encode())
+
 def relativeMove(obj, dx:int, dy:int):
     obj.move(obj.x() + dx, obj.y() + dy)
 
@@ -111,6 +193,8 @@ class myAddTask(QWidget):
         self.comboSbdType = myComboBox(self, self.serial, 'sbdType')
         self.editSensorType = myEditLine(self, self.serial, 'sensorType')
         self.btnAddTask = myButton(self, self.serial, 'add')
+        self.btnDelTask = myButton(self, self.serial, 'del')
+        self.editIndex = myEditLine(self, self.serial, 'index')
         self.initUI()
 
     def initUI(self):
@@ -136,9 +220,11 @@ class myAddTask(QWidget):
         relativeMove(self.editDataLen.lineEdit, -30, 0)
         self.editDataLen.lineEdit.setText('1')
 
+        dataType = ['U16']
         self.comboDataType.label.setAlignment(Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter)
         self.comboDataType.label.setText('数据类型:')
-        self.comboDataType.combo.addItem('U16')
+        for dt in dataType:
+            self.comboDataType.combo.addItem(dt)
         self.comboDataType.move(40, 40)
         relativeMove(self.comboDataType.combo, -30, 5)
 
@@ -168,14 +254,34 @@ class myAddTask(QWidget):
         relativeMove(self.editSensorType.lineEdit, -5, 0)
         self.editSensorType.lineEdit.setText('2054')
 
-        self.btnAddTask.setGeometry(700, 120, 120, 40)
+        self.editIndex.label.setText('指令序号:')
+        self.editIndex.move(40, 80)
+        relativeMove(self.editIndex.lineEdit, -30, 0)
+        self.editIndex.lineEdit.setText('1')
+
+        self.btnAddTask.setGeometry(40, 120, 120, 40)
         self.btnAddTask.clicked[bool].connect(self.sendAddCmd)
 
+        self.btnDelTask.setGeometry(170, 120, 120, 40)
+        self.btnDelTask.clicked[bool].connect(self.sendDelCmd)
+
     def sendAddCmd(self):
-        cmd = 'set,cmd,1,'+f'{self.editAddr.lineEdit.text()}'+','+f'{self.comboOperation.combo.currentText()}'+','
+        cmd = 'set,cmd,'+f'{self.editIndex.lineEdit.text()}'+','+f'{self.editAddr.lineEdit.text()}'+','+f'{self.comboOperation.combo.currentText()}'+','
         cmd += f'{self.editDataAddr.lineEdit.text()}'+','+f'{self.editDataLen.lineEdit.text()}'+','
         cmd += f'{self.comboDataType.combo.currentText()}'+','+f'{self.editFactory.lineEdit.text()}'+','
         cmd += f'{self.editBase.lineEdit.text()}'+','+f'{self.comboSbdType.combo.currentText()}'+','+f'{self.editSensorType.lineEdit.text()}'
+        if self.serial.is_open:
+            while len(cmd) > 32:
+                self.serial.write(cmd[0:32].encode())
+                time.sleep(1.5)
+                cmd = cmd[32:]
+                #print(cmd)
+
+            if len(cmd) > 0:
+                self.serial.write(cmd.encode())
+
+    def sendDelCmd(self):
+        cmd = 'delete cmd,'+f'{self.editIndex.lineEdit.text()}'
         if self.serial.is_open:
             while len(cmd) > 32:
                 self.serial.write(cmd[0:32].encode())
